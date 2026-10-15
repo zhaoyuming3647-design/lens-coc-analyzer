@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="description" content="基于高斯薄透镜几何光学模型的摄影镜头离焦弥散圆（CoC）2D/3D 可视化对比与 CSV 矩阵导出工具">
+    <title>OptiCoC | 镜头光学与离焦弥散圆 2D/3D 分析工具</title>
+    <!-- 引入 Plotly.js 3D 绘图引擎 -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        /* ==========================================================================
+           1. 设计系统与 CSS 变量 (Design Tokens)
+           ========================================================================== */
+        :root {
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --bg-subtle: #f8fafc;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --accent: #dc2626;
+            --accent-light: #fef2f2;
+            --success: #059669;
+            --success-hover: #047857;
+            --success-light: #ecfdf5;
+            --text-main: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --radius-lg: 10px;
+            --radius-md: 6px;
+            --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: var(--font-sans);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ==========================================================================
+           2. 顶部导航栏 (App Header & Device Switcher)
+           ========================================================================== */
+        .app-header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary), #1e40af);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 15px;
+            letter-spacing: -0.5px;
+        }
+
+        .brand-title {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .brand-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .device-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .status-dot.manual {
+            background: var(--primary);
+        }
+
+        /* ==========================================================================
+           3. 主体网格与响应式容器 (Main Grid & Responsive Layout)
+           ========================================================================== */
+        .main-wrapper {
+            max-width: 1440px;
+            margin: 20px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 350px minmax(0, 1fr);
+            gap: 18px;
+            transition: all 0.25s ease;
+        }
+
+        /* 移动端单列模式（由自动识别或手动按钮触发） */
+        .main-wrapper.mobile-mode {
+            grid-template-columns: 1fr;
+            max-width: 720px;
+            padding: 0 12px;
+            margin: 12px auto;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 18px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 18px;
+        }
+
+        .card-header {
+            margin: 0 0 14px 0;
+            font-size: 15px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* ==========================================================================
+           4. 表单与按钮控件 (Forms & Buttons)
+           ========================================================================== */
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            color: var(--text-main);
+            background: var(--bg-subtle);
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 9px 14px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.15s ease;
+            margin-top: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-export {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-export:hover {
+            background: var(--success-hover);
+        }
+
+        .btn-outline {
+            width: auto;
+            margin-top: 0;
+            padding: 5px 12px;
+            font-size: 12px;
+            background: #fff;
+            color: var(--text-secondary);
+            border-color: #cbd5e1;
+        }
+
+        .btn-outline:hover {
+            background: var(--bg-subtle);
+            color: var(--text-main);
+        }
+
+        .segmented-control {
+            display: inline-flex;
+            background: var(--bg-body);
+            padding: 3px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .seg-btn {
+            width: auto;
+            margin: 0;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .seg-btn.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* ==========================================================================
+           5. KPI 指标卡与图表容器 (KPI Cards & Chart Viewport)
+           ========================================================================== */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .main-wrapper.mobile-mode .kpi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .kpi-card {
+            background: var(--bg-subtle);
+            padding: 12px 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary);
+        }
+
+        .kpi-card.lens2 {
+            border-left-color: var(--accent);
+        }
+
+        .kpi-card.cross {
+            border-left-color: var(--success);
+        }
+
+        .kpi-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .kpi-val {
+            font-size: 16px;
+            font-weight: 700;
+            margin: 4px 0;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+        }
+
+        .kpi-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chart-viewport {
+            position: relative;
+            width: 100%;
+            height: 360px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        #chartCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #chartDiv {
+            width: 100%;
+            height: 520px;
+            display: none;
+        }
+
+        /* ==========================================================================
+           6. 数据表格与文档说明 (Data Table & Documentation)
+           ========================================================================== */
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 380px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            text-align: right;
+            font-family: var(--font-mono);
+        }
+
+        th, td {
+            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            padding: 7px 10px;
+            white-space: nowrap;
+        }
+
+        th {
+            background: var(--bg-subtle);
+            position: sticky;
+            top: 0;
+            text-align: center;
+            font-family: var(--font-sans);
+            font-weight: 600;
+            color: var(--text-secondary);
+            z-index: 2;
+        }
+
+        td:first-child {
+            text-align: left;
+            font-weight: 600;
+            background: var(--bg-subtle);
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            font-family: var(--font-sans);
+        }
+
+        tr:hover td {
+            background-color: var(--primary-light);
+        }
+
+        .doc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .main-wrapper.mobile-mode .doc-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .doc-block h3 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: var(--text-main);
+        }
+
+        .doc-block ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .doc-block li {
+            margin-bottom: 6px;
+            line-height: 1.6;
+        }
+
+        .app-footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border-color);
+            margin-top: 20px;
+            background: var(--bg-card);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部栏：品牌标识与自动/手动布局切换器 -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <div class="brand-icon">CoC</div>
+                <div>
+                    <h1 class="brand-title">OptiCoC 镜头离焦弥散圆分析工具</h1>
+                </div>
+            </div>
+            <div class="header-controls">
+                <div class="device-badge" id="deviceStatusBadge" title="系统会根据浏览器 UA 与屏幕宽度自动匹配最佳布局">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="deviceStatusText">正在检测设备...</span>
+                </div>
+                <button class="btn btn-outline" id="btnToggleLayout" onclick="LayoutManager.toggleManualLayout()">
+                    切换电脑 / 手机布局
+                </button>
+                <button class="btn btn-outline" id="btnResetAuto" onclick="LayoutManager.resetToAuto()" style="display: none;">
+                    恢复自动识别
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体内容区 -->
+    <main class="main-wrapper" id="mainContainer">
+        <!-- 左侧参数控制栏 -->
+        <aside>
+            <section class="card">
+                <h2 class="card-header">1. 镜头与构图参数设定</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="f1">镜头 1 焦距 f₁ (mm)</label>
+                        <input type="number" id="f1" value="85" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="F1">镜头 1 光圈 F₁</label>
+                        <input type="number" id="F1" value="1.4" min="0.5" step="0.1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="f2">镜头 2 焦距 f₂ (mm)</label>
+                        <input type="number" id="f2" value="135" min="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="F2">镜头 2 光圈 F₂</label>
+                        <input type="number" id="F2" value="1.8" min="0.5" step="0.1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="mag">等构图像方放大率 M (半身≈0.02, 全身≈0.01, 胸像≈0.04)</label>
+                    <input type="number" id="mag" value="0.02" min="0.001" step="0.005">
+                </div>
+                <div class="form-group">
+                    <label for="u_list">主体距离梯度 u₀ (m, 逗号分隔)</label>
+                    <input type="text" id="u_list" value="1.0, 1.5, 2.0, 3.0, 4.335, 5.0, 6.885, 10.0">
+                </div>
+                <div class="form-group">
+                    <label for="d_list">背景距主体距离梯度 d (m, 逗号分隔)</label>
+                    <input type="text" id="d_list" value="0.5, 1.0, 2.0, 3.0, 5.0, 6.5025, 10.0, 20.0, 50.0">
+                </div>
+                <button class="btn btn-primary" onclick="App.updateAll()">重新计算并刷新图表</button>
+            </section>
+
+            <section class="card">
+                <h2 class="card-header">2. 导出 CSV 数据集 (Excel 兼容)</h2>
+                <button class="btn btn-export" onclick="CSVExporter.exportData(1, 'matrix')">
+                    下载 [镜头 1] 二维矩阵 CSV
+                </button>
+                <button class="btn btn-export" onclick="CSVExporter.exportData(2, 'matrix')">
+                    下载 [镜头 2] 二维矩阵 CSV
+                </button>
+                <button class="btn btn-export" onclick="CSVExporter.exportData(0, 'detailed')">
+                    下载 [双镜头汇总] 结构化明细 CSV
+                </button>
+            </section>
+        </aside>
+
+        <!-- 右侧可视化与报表区 -->
+        <section>
+            <!-- 图表卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <span>核心光学指标对比（全画幅 36×24mm 基准）</span>
+                    <div class="segmented-control">
+                        <button class="seg-btn active" onclick="App.switchChartMode('2d', this)">2D 曲线</button>
+                        <button class="seg-btn" onclick="App.switchChartMode('3d', this)">3D 曲面</button>
+                    </div>
+                </div>
+                <div class="kpi-grid" id="kpi_area"></div>
+                <div class="chart-viewport" id="chartViewport">
+                    <canvas id="chartCanvas"></canvas>
+                    <div id="chartDiv"></div>
+                </div>
+            </div>
+
+            <!-- 矩阵预览卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <span id="tableTitle">弥散圆半径矩阵预览 r (单位: mm)</span>
+                    <div class="segmented-control">
+                        <button class="seg-btn active" onclick="App.switchTableLens(1, this)">镜头 1</button>
+                        <button class="seg-btn" onclick="App.switchTableLens(2, this)">镜头 2</button>
+                        <button class="seg-btn" onclick="App.switchTableLens(3, this)">差值 (镜2 - 镜1)</button>
+                    </div>
+                </div>
+                <div class="table-wrap" id="table_area"></div>
+            </div>
+
+            <!-- 光学原理与参数说明卡片 -->
+            <div class="card">
+                <h2 class="card-header">光学模型与图表参数说明</h2>
+                <div class="doc-grid">
+                    <div class="doc-block">
+                        <h3>一、2D 曲线图坐标定义</h3>
+                        <ul>
+                            <li><strong>横坐标 d (m)</strong>：背景物体与对焦主体之间的距离（0 ~ 25m），数值越大代表背景离主体越远。</li>
+                            <li><strong>纵坐标 r (mm)</strong>：背景点在相机传感器焦平面上形成的离焦弥散圆半径，数值越大虚化越强、光斑越大。</li>
+                        </ul>
+                    </div>
+                    <div class="doc-block">
+                        <h3>二、3D 曲面图三轴定义</h3>
+                        <ul>
+                            <li><strong>X 轴 主体距离 u₀ (m)</strong>：对焦主体到相机的距离（1 ~ 8m），覆盖人像常用拍摄距离。</li>
+                            <li><strong>Y 轴 背景距离 d (m)</strong>：背景物体与对焦主体之间的距离（0.5 ~ 20m）。</li>
+                            <li><strong>Z 轴 弥散圆半径 r (mm)</strong>：传感器上的虚化光斑半径，支持切换「同物距」与「等构图」两种对比模式。</li>
+                        </ul>
+                    </div>
+                    <div class="doc-block">
+                        <h3>三、批量计算梯度参数</h3>
+                        <ul>
+                            <li><strong>主体距离梯度 u₀</strong>：对焦主体到相机的距离序列，作为二维矩阵表的行索引。</li>
+                            <li><strong>背景距离梯度 d</strong>：背景到主体的距离序列，作为二维矩阵表的列索引。</li>
+                        </ul>
+                    </div>
+                    <div class="doc-block">
+                        <h3>四、核心光学指标</h3>
+                        <ul>
+                            <li><strong>像方放大率 M</strong>：主体在传感器上的成像尺寸与真实尺寸之比。M 相同即主体在画面中占比相同。</li>
+                            <li><strong>反超临界距离 d*</strong>：等构图下两镜头虚化光斑相等的背景距离。小于 d* 时大光圈短焦占优，大于 d* 时长焦反超。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        OptiCoC Open-Source Optical Analyzer | 基于高斯薄透镜成像公式构建 | 支持桌面端与移动端自适应切换
+    </footer>
+
+    <script>
+        /**
+         * ============================================================================
+         * 模块 1：光学数学计算引擎 (OpticsEngine)
+         * ============================================================================
+         */
+        const OpticsEngine = {
+            SENSOR_WIDTH_MM: 36.0,
+
+            /**
+             * 生成等间距数值数组
+             */
+            linspace(start, end, count) {
+                const arr = [];
+                const step = (end - start) / (count - 1);
+                for (let i = 0; i < count; i++) {
+                    arr.push(start + step * i);
+                }
+                return arr;
+            },
+
+            /**
+             * 计算薄透镜离焦弥散圆半径 r (单位: mm)
+             * 公式: c = (f^2 / F) * |d| / ((u0 + d) * (u0 - f)), r = c / 2
+             */
+            calcCoCRadius(f_mm, F, u0_m, d_m) {
+                const u0 = u0_m * 1000.0;
+                const d_offset = d_m * 1000.0;
+                const d = Math.abs(d_offset);
+                const u = u0 + d_offset;
+                if (u0 <= f_mm || u <= f_mm) return NaN;
+                const c = (f_mm * f_mm / F) * (d / (u * (u0 - f_mm)));
+                return c / 2.0;
+            },
+
+            /**
+             * 计算全画幅横向视场角 HFOV (单位: 度)
+             */
+            calcHFOV(f_mm) {
+                return (2 * Math.atan(this.SENSOR_WIDTH_MM / (2 * f_mm)) * 180 / Math.PI).toFixed(2);
+            },
+
+            /**
+             * 计算等构图下的虚化反超临界距离 d* (单位: m)
+             */
+            calcCrossoverDistance(f1, F1, f2, F2, M) {
+                const denom = f2 * F1 - f1 * F2;
+                if (Math.abs(denom) <= 1e-6) return null;
+                const val = (1 + 1 / M) * (f1 * f2 * (F2 - F1) / denom) / 1000.0;
+                return (val > 0 && val < 1000) ? val : null;
+            }
+        };
+
+        /**
+         * ============================================================================
+         * 模块 2：设备自动识别与响应式布局管理器 (LayoutManager)
+         * ============================================================================
+         */
+        const LayoutManager = {
+            manualOverride: null, // null = 自动识别, 'mobile' = 强制手机, 'desktop' = 强制桌面
+            mediaQuery: window.matchMedia('(max-width: 960px)'),
+
+            /**
+             * 综合检测当前浏览器是否为移动设备模式（结合 UA 与视口宽度）
+             */
+            detectIsMobileEnv() {
+                const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                    || (navigator.userAgentData && navigator.userAgentData.mobile);
+                const viewportNarrow = this.mediaQuery.matches;
+                return Boolean(uaMobile || viewportNarrow);
+            },
+
+            /**
+             * 判断当前最终生效的布局模式
+             */
+            isMobileActive() {
+                if (this.manualOverride !== null) {
+                    return this.manualOverride === 'mobile';
+                }
+                return this.detectIsMobileEnv();
+            },
+
+            /**
+             * 应用布局并刷新状态徽章与图表尺寸
+             */
+            applyLayout() {
+                const container = document.getElementById('mainContainer');
+                const statusText = document.getElementById('deviceStatusText');
+                const statusDot = document.getElementById('statusDot');
+                const btnReset = document.getElementById('btnResetAuto');
+
+                const mobileActive = this.isMobileActive();
+                container.classList.toggle('mobile-mode', mobileActive);
+
+                const modeName = mobileActive ? '移动端单列' : '桌面端双栏';
+                if (this.manualOverride === null) {
+                    statusText.textContent = `自动识别：${modeName}`;
+                    statusDot.classList.remove('manual');
+                    btnReset.style.display = 'none';
+                } else {
+                    statusText.textContent = `手动固定：${modeName}`;
+                    statusDot.classList.add('manual');
+                    btnReset.style.display = 'inline-flex';
+                }
+
+                // 延迟触发图表自适应重绘
+                setTimeout(() => App.resizeCharts(), 260);
+            },
+
+            /**
+             * 手动切换桌面/手机布局（保留手动覆盖状态）
+             */
+            toggleManualLayout() {
+                const currentMobile = this.isMobileActive();
+                this.manualOverride = currentMobile ? 'desktop' : 'mobile';
+                this.applyLayout();
+            },
+
+            /**
+             * 恢复为自动检测模式
+             */
+            resetToAuto() {
+                this.manualOverride = null;
+                this.applyLayout();
+            },
+
+            /**
+             * 初始化监听器
+             */
+            init() {
+                this.applyLayout();
+                // 监听视口尺寸或手机横竖屏切换，若处于自动模式则实时响应
+                const handleEnvChange = () => {
+                    if (this.manualOverride === null) {
+                        this.applyLayout();
+                    } else {
+                        App.resizeCharts();
+                    }
+                };
+                if (this.mediaQuery.addEventListener) {
+                    this.mediaQuery.addEventListener('change', handleEnvChange);
+                }
+                window.addEventListener('resize', () => App.resizeCharts());
+            }
+        };
+
+        /**
+         * ============================================================================
+         * 模块 3：CSV 数据导出器 (CSVExporter)
+         * ============================================================================
+         */
+        const CSVExporter = {
+            exportData(lensIdx, mode) {
+                const { f1, F1, f2, F2, uList, dList } = App.getInputs();
+                let csv = '\uFEFF'; // UTF-8 BOM 头，确保 Excel 直接打开中文不乱码
+                let filename = '';
+
+                if (mode === 'matrix') {
+                    const f = lensIdx === 1 ? f1 : f2;
+                    const F = lensIdx === 1 ? F1 : F2;
+                    filename = `coc_matrix_${f}mm_f${F}.csv`;
+                    csv += ['主体距离(m) \\ 背景距离d(m) [半径:mm]', ...dList.map(d => `d = ${d}m`)].join(',') + '\r\n';
+                    uList.forEach(u => {
+                        const row = [`u0 = ${u}m`];
+                        dList.forEach(d => {
+                            const r = OpticsEngine.calcCoCRadius(f, F, u, d);
+                            row.push(isNaN(r) ? '' : r.toFixed(5));
+                        });
+                        csv += row.join(',') + '\r\n';
+                    });
+                } else {
+                    filename = `coc_detailed_${f1}mm_vs_${f2}mm.csv`;
+                    csv += '镜头,焦距_f(mm),光圈_F,入瞳_D(mm),主体物距_u0(m),背景距离_d(m),像方放大率_M,弥散圆半径_r(mm),弥散圆半径_r(um),弥散圆直径_c(mm)\r\n';
+                    [[f1, F1, '镜头1'], [f2, F2, '镜头2']].forEach(([f, F, label]) => {
+                        uList.forEach(u => {
+                            dList.forEach(d => {
+                                const r = OpticsEngine.calcCoCRadius(f, F, u, d);
+                                const M = f / (u * 1000.0 - f);
+                                if (!isNaN(r)) {
+                                    csv += `${label},${f},${F},${(f / F).toFixed(2)},${u},${d},${M.toFixed(5)},${r.toFixed(5)},${(r * 1000).toFixed(2)},${(r * 2).toFixed(5)}\r\n`;
+                                }
+                            });
+                        });
+                    });
+                }
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }
+        };
+
+        /**
+         * ============================================================================
+         * 模块 4：主视图与图表渲染控制器 (App)
+         * ============================================================================
+         */
+        const App = {
+            currentChartMode: '2d',
+            currentTableLens: 1,
+
+            /**
+             * 读取并校验表单输入参数
+             */
+            getInputs() {
+                const f1 = parseFloat(document.getElementById('f1').value) || 85;
+                const F1 = parseFloat(document.getElementById('F1').value) || 1.4;
+                const f2 = parseFloat(document.getElementById('f2').value) || 135;
+                const F2 = parseFloat(document.getElementById('F2').value) || 1.8;
+                const M = parseFloat(document.getElementById('mag').value) || 0.02;
+
+                const uList = document.getElementById('u_list').value
+                    .split(',')
+                    .map(s => parseFloat(s.trim()))
+                    .filter(n => !isNaN(n) && n > 0);
+                const dList = document.getElementById('d_list').value
+                    .split(',')
+                    .map(s => parseFloat(s.trim()))
+                    .filter(n => !isNaN(n));
+
+                if (uList.length === 0) uList.push(3.0);
+                if (dList.length === 0) dList.push(5.0);
+
+                return { f1, F1, f2, F2, M, uList, dList };
+            },
+
+            /**
+             * 切换 2D / 3D 视图模式
+             */
+            switchChartMode(mode, btnEl) {
+                this.currentChartMode = mode;
+                const canvas = document.getElementById('chartCanvas');
+                const chartDiv = document.getElementById('chartDiv');
+                const viewport = document.getElementById('chartViewport');
+
+                btnEl.parentElement.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                btnEl.classList.add('active');
+
+                if (mode === '2d') {
+                    chartDiv.style.display = 'none';
+                    canvas.style.display = 'block';
+                    viewport.style.height = '360px';
+                    this.updateAll();
+                } else {
+                    canvas.style.display = 'none';
+                    chartDiv.style.display = 'block';
+                    viewport.style.height = '520px';
+                    this.updateAll();
+                    setTimeout(() => this.resizeCharts(), 50);
+                }
+            },
+
+            /**
+             * 切换底部矩阵表预览对象（镜头1 / 镜头2 / 差值）
+             */
+            switchTableLens(lensMode, btnEl) {
+                this.currentTableLens = lensMode;
+                btnEl.parentElement.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                btnEl.classList.add('active');
+                const { f1, F1, f2, F2, uList, dList } = this.getInputs();
+                this.renderTable(f1, F1, f2, F2, uList, dList);
+            },
+
+            /**
+             * 响应窗口或布局变化的图表重绘
+             */
+            resizeCharts() {
+                if (this.currentChartMode === '2d') {
+                    const { f1, F1, f2, F2, M } = this.getInputs();
+                    const u0_1 = (f1 * (1 + 1 / M)) / 1000.0;
+                    const u0_2 = (f2 * (1 + 1 / M)) / 1000.0;
+                    const d_star = OpticsEngine.calcCrossoverDistance(f1, F1, f2, F2, M);
+                    this.draw2DChart(f1, F1, f2, F2, u0_1, u0_2, d_star);
+                } else if (window.Plotly) {
+                    const chartDiv = document.getElementById('chartDiv');
+                    Plotly.relayout(chartDiv, { width: chartDiv.clientWidth });
+                }
+            },
+
+            /**
+             * 全局更新入口
+             */
+            updateAll() {
+                const { f1, F1, f2, F2, M, uList, dList } = this.getInputs();
+                const D1 = f1 / F1;
+                const D2 = f2 / F2;
+                const u0_1 = (f1 * (1 + 1 / M)) / 1000.0;
+                const u0_2 = (f2 * (1 + 1 / M)) / 1000.0;
+                const d_star = OpticsEngine.calcCrossoverDistance(f1, F1, f2, F2, M);
+                const d_star_str = d_star !== null ? `${d_star.toFixed(4)} m` : '无反超交点';
+
+                // 渲染顶部 KPI 指标卡
+                document.getElementById('kpi_area').innerHTML = `
+                    <div class="kpi-card">
+                        <div class="kpi-title">镜头 1 (${f1}mm f/${F1})</div>
+                        <div class="kpi-val">入瞳 ${D1.toFixed(1)}mm | 视角 ${OpticsEngine.calcHFOV(f1)}°</div>
+                        <div class="kpi-sub">等构图 M=${M} 物距: ${u0_1.toFixed(3)} m</div>
+                    </div>
+                    <div class="kpi-card lens2">
+                        <div class="kpi-title">镜头 2 (${f2}mm f/${F2})</div>
+                        <div class="kpi-val">入瞳 ${D2.toFixed(1)}mm | 视角 ${OpticsEngine.calcHFOV(f2)}°</div>
+                        <div class="kpi-sub">等构图 M=${M} 物距: ${u0_2.toFixed(3)} m</div>
+                    </div>
+                    <div class="kpi-card cross">
+                        <div class="kpi-title">等构图 虚化反超临界距离 d*</div>
+                        <div class="kpi-val">${d_star_str}</div>
+                        <div class="kpi-sub">无穷远光斑直径比: ${(D2 / D1).toFixed(3)}x</div>
+                    </div>
+                `;
+
+                if (this.currentChartMode === '2d') {
+                    this.draw2DChart(f1, F1, f2, F2, u0_1, u0_2, d_star);
+                } else {
+                    this.render3DChart(f1, F1, f2, F2);
+                }
+
+                this.renderTable(f1, F1, f2, F2, uList, dList);
+            },
+
+            /**
+             * 绘制支持 Retina 高分屏抗锯齿的 2D 曲线图
+             */
+            draw2DChart(f1, F1, f2, F2, u0_1, u0_2, d_star) {
+                const canvas = document.getElementById('chartCanvas');
+                const ctx = canvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+
+                const cssWidth = canvas.clientWidth || 600;
+                const cssHeight = 360;
+
+                canvas.width = cssWidth * dpr;
+                canvas.height = cssHeight * dpr;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                const W = cssWidth, H = cssHeight;
+                ctx.clearRect(0, 0, W, H);
+
+                const padL = 62, padR = 28, padT = 38, padB = 46;
+                const plotW = W - padL - padR, plotH = H - padT - padB;
+                const maxD = 25.0;
+
+                const r1_max = OpticsEngine.calcCoCRadius(f1, F1, u0_1, maxD);
+                const r2_max = OpticsEngine.calcCoCRadius(f2, F2, u0_2, maxD);
+                const maxR = Math.max(isNaN(r1_max) ? 0 : r1_max, isNaN(r2_max) ? 0 : r2_max) * 1.15 || 0.1;
+
+                // 绘制背景网格与 Y 轴刻度
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.fillStyle = '#64748b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.lineWidth = 1;
+
+                for (let i = 0; i <= 5; i++) {
+                    const yVal = (maxR / 5) * i;
+                    const y = padT + plotH - (yVal / maxR) * plotH;
+                    ctx.beginPath();
+                    ctx.moveTo(padL, y);
+                    ctx.lineTo(W - padR, y);
+                    ctx.stroke();
+                    ctx.fillText(yVal.toFixed(2), padL - 8, y + 4);
+                }
+
+                // X 轴刻度
+                ctx.textAlign = 'center';
+                for (let d = 0; d <= maxD; d += 5) {
+                    const x = padL + (d / maxD) * plotW;
+                    ctx.beginPath();
+                    ctx.moveTo(x, padT);
+                    ctx.lineTo(x, padT + plotH);
+                    ctx.stroke();
+                    ctx.fillText(d + 'm', x, H - padB + 20);
+                }
+
+                // 坐标轴名称
+                ctx.fillStyle = '#0f172a';
+                ctx.font = '600 12px sans-serif';
+                ctx.fillText('背景距主体距离 d (m)', padL + plotW / 2, H - 8);
+                ctx.save();
+                ctx.translate(18, padT + plotH / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText('弥散圆半径 r (mm)', 0, 0);
+                ctx.restore();
+
+                // 曲线绘制子函数
+                const plotCurve = (f, F, u0, color) => {
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    let started = false;
+                    for (let i = 0; i <= 200; i++) {
+                        const d = (i / 200) * maxD;
+                        const r = OpticsEngine.calcCoCRadius(f, F, u0, d);
+                        if (isNaN(r)) continue;
+                        const x = padL + (d / maxD) * plotW;
+                        const y = padT + plotH - (r / maxR) * plotH;
+                        if (!started) {
+                            ctx.moveTo(x, y);
+                            started = true;
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                    ctx.stroke();
+                };
+
+                plotCurve(f1, F1, u0_1, '#2563eb');
+                plotCurve(f2, F2, u0_2, '#dc2626');
+
+                // 绘制反超临界点标注
+                if (d_star && d_star <= maxD) {
+                    const r_star = OpticsEngine.calcCoCRadius(f1, F1, u0_1, d_star);
+                    if (!isNaN(r_star)) {
+                        const cx = padL + (d_star / maxD) * plotW;
+                        const cy = padT + plotH - (r_star / maxR) * plotH;
+                        ctx.strokeStyle = '#059669';
+                        ctx.lineWidth = 1.5;
+                        ctx.setLineDash([4, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(cx, padT);
+                        ctx.lineTo(cx, padT + plotH);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        ctx.fillStyle = '#059669';
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.font = '600 12px sans-serif';
+                        ctx.textAlign = cx > W * 0.65 ? 'right' : 'left';
+                        const offsetX = cx > W * 0.65 ? -10 : 10;
+                        ctx.fillText(`反超点 d*=${d_star.toFixed(2)}m (r=${r_star.toFixed(3)}mm)`, cx + offsetX, cy - 10);
+                    }
+                }
+
+                // 顶部标题与图例
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 13px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('等构图下弥散圆半径 r (mm) 随背景距离 d (m) 变化曲线', padL, 20);
+
+                if (W > 520) {
+                    ctx.textAlign = 'right';
+                    ctx.fillStyle = '#2563eb';
+                    ctx.fillText(`■ 镜头1 (${f1}mm f/${F1})`, W - 160, 20);
+                    ctx.fillStyle = '#dc2626';
+                    ctx.fillText(`■ 镜头2 (${f2}mm f/${F2})`, W - padR, 20);
+                }
+            },
+
+            /**
+             * 渲染 Plotly 3D 交互式双镜头对比曲面
+             */
+            render3DChart(f1, F1, f2, F2) {
+                if (!window.Plotly) return;
+                const u0_1d = OpticsEngine.linspace(1.0, 8.0, 60);
+                const d_1d = OpticsEngine.linspace(0.5, 20.0, 60);
+
+                const U0 = [], D = [];
+                for (let i = 0; i < u0_1d.length; i++) {
+                    U0.push([]);
+                    D.push([]);
+                    for (let j = 0; j < d_1d.length; j++) {
+                        U0[i].push(u0_1d[i]);
+                        D[i].push(d_1d[j]);
+                    }
+                }
+
+                const gridR = (f, F, uGrid, dGrid) => {
+                    const res = [];
+                    for (let i = 0; i < uGrid.length; i++) {
+                        res.push([]);
+                        for (let j = 0; j < uGrid[i].length; j++) {
+                            res[i].push(OpticsEngine.calcCoCRadius(f, F, uGrid[i][j], dGrid[i][j]));
+                        }
+                    }
+                    return res;
+                };
+
+                const R1 = gridR(f1, F1, U0, D);
+                const R2_same_u = gridR(f2, F2, U0, D);
+
+                // 等构图下镜头 2 的退后物距矩阵
+                const U0_2_eq = U0.map(row => row.map(u => (f2 / 1000.0) + (u - f1 / 1000.0) * (f2 / f1)));
+                const R2_eq = gridR(f2, F2, U0_2_eq, D);
+
+                // 计算三维空间中的反超临界脊线
+                const u_c = [], d_c = [], r_c = [];
+                const denom = f2 * F1 - f1 * F2;
+                if (Math.abs(denom) > 1e-6) {
+                    for (let i = 0; i < u0_1d.length; i++) {
+                        const u = u0_1d[i];
+                        const Mi = (f1 / 1000.0) / (u - f1 / 1000.0);
+                        const dCross = (1.0 + 1.0 / Mi) * (f1 * f2 * (F2 - F1) / denom) / 1000.0;
+                        if (dCross >= d_1d[0] && dCross <= d_1d[d_1d.length - 1]) {
+                            const r = OpticsEngine.calcCoCRadius(f1, F1, u, dCross);
+                            if (!isNaN(r)) {
+                                u_c.push(u);
+                                d_c.push(dCross);
+                                r_c.push(r);
+                            }
+                        }
+                    }
+                }
+
+                const data = [
+                    {
+                        x: u0_1d, y: d_1d, z: R1,
+                        type: 'surface', name: `${f1}mm f/${F1}`,
+                        colorscale: 'Blues', opacity: 0.82, showscale: false
+                    },
+                    {
+                        x: u0_1d, y: d_1d, z: R2_same_u,
+                        type: 'surface', name: `${f2}mm f/${F2} (同物距)`,
+                        colorscale: 'Reds', opacity: 0.85, visible: true, showscale: false
+                    },
+                    {
+                        x: u0_1d, y: d_1d, z: R2_eq,
+                        type: 'surface', name: `${f2}mm f/${F2} (等构图)`,
+                        colorscale: 'Reds', opacity: 0.85, visible: false, showscale: false
+                    },
+                    {
+                        x: u_c, y: d_c, z: r_c,
+                        type: 'scatter3d', mode: 'lines+markers', name: '等构图反超临界线',
+                        visible: false, line: { color: '#00ff66', width: 7 }, marker: { size: 3 }
+                    }
+                ];
+
+                const layout = {
+                    title: `3D 弥散圆半径曲面对比：${f1}mm f/${F1} vs ${f2}mm f/${F2}`,
+                    margin: { l: 0, r: 0, t: 42, b: 0 },
+                    scene: {
+                        xaxis: { title: '主体距离 u₀ (m)' },
+                        yaxis: { title: '背景距离 d (m)' },
+                        zaxis: { title: '弥散圆半径 r (mm)' },
+                        camera: { eye: { x: 1.6, y: -1.6, z: 1.2 } }
+                    },
+                    updatemenus: [{
+                        type: 'buttons', direction: 'right', x: 0.02, y: 0.98,
+                        buttons: [
+                            { label: '同机位物距对比', method: 'update', args: [{ visible: [true, true, false, false] }] },
+                            { label: '等构图退后对比', method: 'update', args: [{ visible: [true, false, true, true] }] }
+                        ]
+                    }],
+                    legend: { orientation: 'h', y: -0.05 }
+                };
+
+                Plotly.react('chartDiv', data, layout, { responsive: true, displayModeBar: true });
+            },
+
+            /**
+             * 渲染二维数据矩阵预览表
+             */
+            renderTable(f1, F1, f2, F2, uList, dList) {
+                const titleEl = document.getElementById('tableTitle');
+                if (this.currentTableLens === 1) {
+                    titleEl.textContent = `镜头 1 (${f1}mm f/${F1}) 弥散圆半径矩阵 r (单位: mm)`;
+                } else if (this.currentTableLens === 2) {
+                    titleEl.textContent = `镜头 2 (${f2}mm f/${F2}) 弥散圆半径矩阵 r (单位: mm)`;
+                } else {
+                    titleEl.textContent = `同物距下两镜头半径差值矩阵 Δr = r₂ - r₁ (单位: mm)`;
+                }
+
+                let html = '<table><thead><tr><th>主体物距 u₀ \\ 背景距离 d</th>';
+                dList.forEach(d => html += `<th>d = ${d}m</th>`);
+                html += '</tr></thead><tbody>';
+
+                uList.forEach(u => {
+                    html += `<tr><td>u₀ = ${u}m</td>`;
+                    dList.forEach(d => {
+                        let val;
+                        if (this.currentTableLens === 1) {
+                            val = OpticsEngine.calcCoCRadius(f1, F1, u, d);
+                        } else if (this.currentTableLens === 2) {
+                            val = OpticsEngine.calcCoCRadius(f2, F2, u, d);
+                        } else {
+                            const r1 = OpticsEngine.calcCoCRadius(f1, F1, u, d);
+                            const r2 = OpticsEngine.calcCoCRadius(f2, F2, u, d);
+                            val = r2 - r1;
+                        }
+                        const formatted = isNaN(val)
+                            ? '-'
+                            : (this.currentTableLens === 3 && val > 0 ? `+${val.toFixed(5)}` : val.toFixed(5));
+                        html += `<td>${formatted}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('table_area').innerHTML = html;
+            }
+        };
+
+        // 页面加载完成后启动自动识别与初始化渲染
+        window.addEventListener('DOMContentLoaded', () => {
+            LayoutManager.init();
+            App.updateAll();
+        });
+    </script>
+</body>
+</html>
