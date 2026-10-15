@@ -64,7 +64,8 @@ $$d^* = \left(1 + \frac{1}{M}\right) \cdot \frac{f_1 f_2 (F_2 - F_1)}{f_2 F_1 - 
 
 ```bash
 # Clone the repository
-git clone [https://github.com/your-username/OptiCoC.git](https://github.com/your-username/OptiCoC.git)
+git clone https://github.com/zhaoyuming3647-design/lens-coc-analyzer.git
 
 # Open index.html in your browser
-open OptiCoC/index.html
+cd lens-coc-analyzer
+open index.html
