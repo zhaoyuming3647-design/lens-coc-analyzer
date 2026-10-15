@@ -32,6 +32,12 @@ $$r = \frac{c}{2} = \frac{f^2}{2 \cdot F} \cdot \frac{\vert{}d\vert{}}{(u_0 + d)
 
 $$d^* = \left(1 + \frac{1}{M}\right) \cdot \frac{f_1 f_2 (F_2 - F_1)}{f_2 F_1 - f_1 F_2}$$
 
+### 🤝 致谢
+本项目在光学算法推导、数学建模与前端工程实现过程中，得到了 **Google Gemini** 的全流程结对编程协助：
+1. **光学公式推导**：协助推导高斯薄透镜离焦弥散圆精确计算公式，并推导出等构图条件下虚化反超临界距离 $d^*$ 的解析表达式；
+2. **可视化实现**：协助编写了基于原生 HTML5 Canvas 的高分屏 Retina 抗锯齿 2D 绘图逻辑，以及基于 Plotly.js 的 3D 双曲面交互对比图表；
+3. **架构与工程**：协助设计了零构建单文件响应式架构，实现了设备模式自适应检测、中英双语国际化（i18n）字典驱动以及支持 Excel 直接读取的 CSV 导出模块。
+
 ---
 
 <h2 id="english-documentation">🇬🇧 English Documentation</h2>
@@ -42,24 +48,32 @@ $$d^* = \left(1 + \frac{1}{M}\right) \cdot \frac{f_1 f_2 (F_2 - F_1)}{f_2 F_1 - 
 ### ✨ Key Features
 - **Bilingual Interface (i18n)**: Seamless one-click switching between English and Chinese across all UI elements, charts, and CSV headers.
 - **2D / 3D Dual Visualization**:
-  - **2D Curve**: Evaluates bokeh growth curves under identical framing, pinpointing the crossover distance $d^*$.
-  - **3D Surface**: Powered by Plotly.js, rendering interactive 3D blur response surfaces for both same-distance and equivalent framing.
-- **Smart Responsive Layout**: Automatically adapts to mobile vs. desktop viewports, with manual toggle support.
-- **Excel-Compatible CSV Export**: Generates 2D matrix grids and detailed comparison datasets with UTF-8 BOM encoding.
+  - **2D Curve (Retina Crisp Rendering)**: Evaluates bokeh growth curves under identical framing, pinpointing the crossover distance $d^*$.
+  - **3D Surface (Powered by Plotly.js)**: Renders interactive 3D blur response surfaces for both same-distance and equivalent framing modes.
+- **Smart Responsive Layout**: Automatically adapts to mobile vs. desktop viewports via User-Agent and media queries, with manual override support.
+- **Excel-Compatible CSV Export**: Generates 2D matrix grids and detailed comparison datasets with UTF-8 BOM encoding for seamless Excel import.
 
 ### 📐 Optical Formulation
+For a lens with focal length $f$, f-number $F$, subject focus distance $u_0$, and background distance relative to the subject $d$, the defocus blur circle radius $r$ on the sensor plane is:
+
 $$r = \frac{c}{2} = \frac{f^2}{2 \cdot F} \cdot \frac{\vert{}d\vert{}}{(u_0 + d)(u_0 - f)}$$
 
-Under **identical framing (constant magnification $M$)**, the crossover background distance $d^*$ is:
+Under **identical framing (constant magnification $M = \frac{f}{u_0 - f}$)**, the crossover background distance $d^*$ where two lenses produce identical blur spot size is:
 
 $$d^* = \left(1 + \frac{1}{M}\right) \cdot \frac{f_1 f_2 (F_2 - F_1)}{f_2 F_1 - f_1 F_2}$$
+
+### 🤝 Acknowledgments
+This project was developed with the assistance of **Google Gemini** as an AI pair programmer throughout the theoretical modeling and frontend implementation:
+1. **Optical Formulation**: Assisted in deriving the exact thin-lens defocus blur circle formula and constructing the analytical solution for the crossover background distance $d^*$ under equivalent framing;
+2. **Visualization Engineering**: Assisted in implementing the high-DPI Retina antialiased 2D canvas plotting engine and the Plotly.js 3D dual-surface interactive comparison diagram;
+3. **Architecture & Tooling**: Assisted in designing the zero-build single-file responsive architecture, environment-based device detection, bilingual i18n localization engine, and UTF-8 BOM Excel-compatible CSV export modules.
 
 ---
 
 ## 🚀 在线使用 / Quick Start
 
-- **在线直接访问**：[https://zhaoyuming3647-design.github.io/lens-coc-analyzer/](https://zhaoyuming3647-design.github.io/lens-coc-analyzer/)
-- **本地运行**：克隆仓库后，直接用任意浏览器双击打开 `index.html` 即可：
+- **在线直接访问 / Live Demo**：[https://zhaoyuming3647-design.github.io/lens-coc-analyzer/](https://zhaoyuming3647-design.github.io/lens-coc-analyzer/)
+- **本地运行 / Local Run**：克隆仓库后，直接用任意浏览器双击打开 `index.html` 即可：
 
 ```bash
 git clone [https://github.com/zhaoyuming3647-design/lens-coc-analyzer.git](https://github.com/zhaoyuming3647-design/lens-coc-analyzer.git)
